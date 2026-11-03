@@ -8,13 +8,14 @@ import rateLimit from 'express-rate-limit';
 import Razorpay from 'razorpay';
 import { Product, Order } from './models.js';
 import { seedData } from './seedData.js';
+import { authRouter, meRouter, optionalAuth } from './auth.js';
 
 const {
   MONGO_URI, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
   CLIENT_ORIGIN = '', PORT = 5000, ADMIN_TOKEN, AUTO_SEED,
 } = process.env;
 
-for (const [k, v] of Object.entries({ MONGO_URI, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET })) {
+for (const [k, v] of Object.entries({ MONGO_URI, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, JWT_SECRET: process.env.JWT_SECRET })) {
   if (!v) { console.error(`Missing env var ${k}`); process.exit(1); }
 }
 
@@ -62,6 +63,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 app.use(express.json({ limit: '50kb' }));
 app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false }));
 
+app.use('/api/auth', authRouter);
+app.use('/api/me', meRouter);
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/products', async (_req, res, next) => {
@@ -78,7 +82,7 @@ app.get('/api/products/:id', async (req, res, next) => {
 
 const str = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-app.post('/api/orders', rateLimit({ windowMs: 60 * 1000, limit: 10 }), async (req, res, next) => {
+app.post('/api/orders', rateLimit({ windowMs: 60 * 1000, limit: 10 }), optionalAuth, async (req, res, next) => {
   try {
     const { items, customer = {} } = req.body || {};
     if (!Array.isArray(items) || !items.length || items.length > 20)
@@ -107,7 +111,7 @@ app.post('/api/orders', rateLimit({ windowMs: 60 * 1000, limit: 10 }), async (re
 
     const amount = total * 100; // paise
     const rzpOrder = await rzp.orders.create({ amount, currency: 'INR', receipt: `rcpt_${Date.now()}` });
-    const order = await Order.create({ items: lines, customer: c, amount, razorpayOrderId: rzpOrder.id });
+    const order = await Order.create({ user: req.userId || undefined, items: lines, customer: c, amount, razorpayOrderId: rzpOrder.id });
     res.status(201).json({
       orderId: order._id, razorpayOrderId: rzpOrder.id, amount, currency: 'INR', key: RAZORPAY_KEY_ID,
     });
@@ -152,6 +156,15 @@ app.delete('/api/admin/products/:id', admin, async (req, res, next) => {
 });
 app.get('/api/admin/orders', admin, async (_req, res, next) => {
   try { res.json(await Order.find().sort({ createdAt: -1 }).limit(100).lean()); } catch (e) { next(e); }
+});
+
+app.put('/api/admin/orders/:id/status', admin, async (req, res, next) => {
+  try {
+    const { status } = req.body || {};
+    if (!['paid', 'shipped', 'delivered', 'cancelled'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+    const o = await Order.findOneAndUpdate({ _id: req.params.id, status: { $ne: 'created' } }, { status }, { new: true });
+    o ? res.json(o) : res.status(404).json({ error: 'Not found' });
+  } catch (e) { bad(e, res, next); }
 });
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

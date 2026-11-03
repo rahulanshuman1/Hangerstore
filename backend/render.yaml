@@ -14,3 +14,4 @@ services:
       - { key: RAZORPAY_WEBHOOK_SECRET, sync: false }
       - { key: CLIENT_ORIGIN, sync: false }
       - { key: ADMIN_TOKEN, sync: false }
+      - { key: JWT_SECRET, sync: false }

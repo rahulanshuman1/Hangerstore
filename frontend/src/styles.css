@@ -67,3 +67,28 @@ input{padding:12px;border:1px solid var(--line);border-radius:4px;width:100%}
 .err{color:#b3261e;font-size:.9rem}
 @media (max-width:640px){.modal{grid-template-columns:1fr}.modal-art{padding:18px}.hero-note{position:static;margin:18px 16px 0;text-align:left}}
 @media (prefers-reduced-motion:reduce){.rail-track,.swing,.hero{animation:none}.rail{overflow-x:auto}}
+
+/* Accounts, search, wishlist */
+.cardwrap{position:relative}.cardwrap .card{width:100%}
+.heart{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.85);font-size:1.15rem;line-height:1}
+.heart.on{color:#c2294a}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px}
+.toolbar input{flex:1 1 220px;width:auto}
+select{padding:12px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.modal.auth{display:block;max-width:400px;padding:32px 28px}.modal.auth h2{margin-bottom:16px}
+.link.left{margin:0 0 4px;text-align:left}
+.btn.narrow{width:auto;padding:12px 22px}
+.account{max-width:760px;margin:0 auto;padding:110px clamp(16px,4vw,32px) 60px}
+.account h1{font-size:clamp(1.6rem,3.4vw,2.2rem);letter-spacing:-.02em}
+.account .row,.orders .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.account .row{margin-bottom:20px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:24px}
+.tabs button{padding:10px 14px;border-bottom:2px solid transparent;color:var(--muted)}
+.tabs .on{color:var(--ink);border-color:var(--ink);font-weight:600}
+.orders{list-style:none;padding:0;display:grid;gap:14px;margin-bottom:18px}
+.orders li{border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:4px;background:#fff}
+.badge{font-size:.78rem;padding:3px 9px;border-radius:99px;background:#e8e6f0}
+.badge.paid{background:#e3eefc}.badge.shipped{background:#fdf0d5}.badge.delivered{background:#dcf2e0}.badge.cancelled{background:#f7dcdc}
+.acts{display:flex;gap:16px}.acts .link{margin:6px 0 0;display:inline}
+.addr{margin-top:16px}.check{display:flex;gap:8px;align-items:center}.check input{width:auto}
+.stack{display:grid;gap:32px;max-width:420px}.stack h3{margin-bottom:4px}
