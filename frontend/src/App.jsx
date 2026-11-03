@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import AuthModal from './AuthModal.jsx';
 import Account from './Account.jsx';
+import TrackModal from './TrackModal.jsx';
 const inr = (n) => '₹' + n.toLocaleString('en-IN');
 
 const FALLBACK = ['#1f2a44', '#b4bcc6', '#2b2b2e', '#e3d6bb', '#1f5a3a', '#4a4a4d']
@@ -111,7 +112,7 @@ function Bag({ cart, setCart, onClose, onPaid, user }) {
         handler: async (res) => {
           try {
             const d = await api('/api/orders/verify', { method: 'POST', body: res });
-            onPaid(d.orderId);
+            onPaid(d.orderNumber || d.orderId);
           } catch (ex) { setErr(ex.message || 'Payment went through but we could not confirm it. Contact support with your payment ID: ' + res.razorpay_payment_id); }
           setBusy(false);
         },
@@ -174,6 +175,7 @@ export default function App() {
   const [open, setOpen] = useState(null);
   const [bagOpen, setBagOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [trackOpen, setTrackOpen] = useState(false);
   const [done, setDone] = useState('');
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(!!getToken());
@@ -226,6 +228,7 @@ export default function App() {
         <a className="brand" href="#top">Hangar</a>
         <nav>
           <a href="#shop">Shop</a>
+          <button onClick={() => setTrackOpen(true)}>Track order</button>
           {user ? <a href="#account">Account</a> : <button onClick={() => setAuthOpen(true)}>Sign in</button>}
           <button onClick={() => setBagOpen(true)}>Bag ({count})</button>
         </nav>
@@ -276,12 +279,13 @@ export default function App() {
 
       {open && <ProductModal p={open} onClose={() => setOpen(null)} onAdd={add} liked={isLiked(open)} onLike={like} />}
       {bagOpen && <Bag cart={cart} setCart={setCart} onClose={() => setBagOpen(false)} onPaid={paid} user={user} />}
+      {trackOpen && <TrackModal onClose={() => setTrackOpen(false)} />}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
       {done && (
         <div className="overlay" onClick={() => setDone('')}>
           <div className="modal done" onClick={(e) => e.stopPropagation()}>
             <h2>Order confirmed</h2>
-            <p className="muted">Reference {String(done).slice(-8)}. Payment received and your order is being packed.{user ? ' Track it under Account.' : ''}</p>
+            <p className="muted">Order number {done}. Payment received and your order is being packed.{user ? ' Track it under Account.' : ''}</p>
             <button className="btn" onClick={() => setDone('')}>Keep shopping</button>
           </div>
         </div>

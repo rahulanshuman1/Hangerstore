@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import Tracker from './Tracker.jsx';
 
 const inr = (n) => '₹' + n.toLocaleString('en-IN');
 const STATUS = { paid: 'Order placed', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled' };
@@ -16,9 +17,10 @@ function Orders() {
     <ul className="orders">
       {orders.map((o) => (
         <li key={o._id}>
-          <div className="row"><strong>Order {String(o._id).slice(-8)}</strong><span className={`badge ${o.status}`}>{STATUS[o.status] || o.status}</span></div>
+          <div className="row"><strong>Order {o.orderNumber || String(o._id).slice(-8)}</strong><span className={`badge ${o.status}`}>{STATUS[o.status] || o.status}</span></div>
           <p className="muted">{new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · Deliver to {o.customer?.city}</p>
           {o.items.map((i, k) => <p key={k}>{i.qty} × {i.name} <span className="muted">(size {i.size})</span></p>)}
+          <details className="trk"><summary>Track order</summary><Tracker order={o} /></details>
           <p className="row"><span className="muted">Total paid</span><strong>{inr(o.amount / 100)}</strong></p>
         </li>
       ))}

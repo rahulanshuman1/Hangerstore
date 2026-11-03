@@ -35,7 +35,7 @@ const safeEqual = (a, b) => {
 async function markPaid(razorpayOrderId, paymentId) {
   const order = await Order.findOneAndUpdate(
     { razorpayOrderId, status: 'created' },
-    { status: 'paid', razorpayPaymentId: paymentId },
+    { status: 'paid', razorpayPaymentId: paymentId, $push: { history: { status: 'paid', note: 'Payment received' } } },
     { new: true },
   );
   if (order) {
@@ -111,10 +111,22 @@ app.post('/api/orders', rateLimit({ windowMs: 60 * 1000, limit: 10 }), optionalA
 
     const amount = total * 100; // paise
     const rzpOrder = await rzp.orders.create({ amount, currency: 'INR', receipt: `rcpt_${Date.now()}` });
-    const order = await Order.create({ user: req.userId || undefined, items: lines, customer: c, amount, razorpayOrderId: rzpOrder.id });
+    const order = await Order.create({ orderNumber: 'HG-' + crypto.randomBytes(4).toString('hex').toUpperCase(), user: req.userId || undefined, items: lines, customer: c, amount, razorpayOrderId: rzpOrder.id });
     res.status(201).json({
       orderId: order._id, razorpayOrderId: rzpOrder.id, amount, currency: 'INR', key: RAZORPAY_KEY_ID,
     });
+  } catch (e) { next(e); }
+});
+
+// Public order lookup for guests: needs the order number AND the email used at checkout
+app.post('/api/orders/track', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), async (req, res, next) => {
+  try {
+    const num = str(req.body?.orderNumber, 30).toUpperCase(), email = str(req.body?.email, 120).toLowerCase();
+    const o = num && email ? await Order.findOne({ orderNumber: num, status: { $ne: 'created' } }).lean() : null;
+    if (!o || (o.customer?.email || '').toLowerCase() !== email)
+      return res.status(404).json({ error: "We couldn't find that order. Check the order number and email." });
+    const { orderNumber, status, items, amount, createdAt, tracking, history } = o;
+    res.json({ orderNumber, status, items, amount, createdAt, tracking, history, customer: { city: o.customer.city } });
   } catch (e) { next(e); }
 });
 
@@ -126,7 +138,7 @@ app.post('/api/orders/verify', async (req, res, next) => {
       return res.status(400).json({ error: 'Payment could not be verified.' });
     const order = await markPaid(oid, pid);
     if (!order) return res.status(404).json({ error: 'Order not found.' });
-    res.json({ ok: true, orderId: order._id });
+    res.json({ ok: true, orderId: order._id, orderNumber: order.orderNumber || String(order._id).slice(-8) });
   } catch (e) { next(e); }
 });
 
@@ -160,9 +172,22 @@ app.get('/api/admin/orders', admin, async (_req, res, next) => {
 
 app.put('/api/admin/orders/:id/status', admin, async (req, res, next) => {
   try {
-    const { status } = req.body || {};
-    if (!['paid', 'shipped', 'delivered', 'cancelled'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
-    const o = await Order.findOneAndUpdate({ _id: req.params.id, status: { $ne: 'created' } }, { status }, { new: true });
+    const { status, tracking = {}, note } = req.body || {};
+    const $set = {}, upd = { $set };
+    if (status !== undefined) {
+      if (!['paid', 'shipped', 'delivered', 'cancelled'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+      $set.status = status;
+      upd.$push = { history: { status, note: str(note, 200) } };
+    }
+    for (const k of ['courier', 'trackingId', 'url']) if (typeof tracking[k] === 'string') $set[`tracking.${k}`] = str(tracking[k], 300);
+    if ($set['tracking.url'] && !/^https?:\/\//i.test($set['tracking.url'])) return res.status(400).json({ error: 'Tracking url must start with http:// or https://' });
+    if (tracking.eta) {
+      const d = new Date(tracking.eta);
+      if (isNaN(d)) return res.status(400).json({ error: 'Invalid eta date.' });
+      $set['tracking.eta'] = d;
+    }
+    if (!Object.keys($set).length) return res.status(400).json({ error: 'Nothing to update.' });
+    const o = await Order.findOneAndUpdate({ _id: req.params.id, status: { $ne: 'created' } }, upd, { new: true });
     o ? res.json(o) : res.status(404).json({ error: 'Not found' });
   } catch (e) { bad(e, res, next); }
 });

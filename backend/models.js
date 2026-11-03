@@ -38,6 +38,9 @@ const orderSchema = new mongoose.Schema({
   status: { type: String, enum: ['created', 'paid', 'shipped', 'delivered', 'cancelled', 'failed'], default: 'created', index: true },
   razorpayOrderId: { type: String, index: true },
   razorpayPaymentId: String,
+  orderNumber: { type: String, index: true },
+  tracking: { courier: String, trackingId: String, url: String, eta: Date },
+  history: [{ status: String, note: String, at: { type: Date, default: Date.now } }],
 }, { timestamps: true });
 
 export const Product = mongoose.model('Product', productSchema);
