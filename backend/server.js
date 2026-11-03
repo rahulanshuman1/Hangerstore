@@ -7,10 +7,11 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import Razorpay from 'razorpay';
 import { Product, Order } from './models.js';
+import { seedData } from './seedData.js';
 
 const {
   MONGO_URI, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
-  CLIENT_ORIGIN = '', PORT = 5000,
+  CLIENT_ORIGIN = '', PORT = 5000, ADMIN_TOKEN, AUTO_SEED,
 } = process.env;
 
 for (const [k, v] of Object.entries({ MONGO_URI, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET })) {
@@ -125,6 +126,34 @@ app.post('/api/orders/verify', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---- Admin API (send header: Authorization: Bearer <ADMIN_TOKEN>) ----
+const admin = (req, res, next) => {
+  if (!ADMIN_TOKEN) return res.status(501).json({ error: 'Admin API is off. Set ADMIN_TOKEN.' });
+  const t = (req.get('authorization') || '').replace(/^Bearer /, '');
+  return safeEqual(t, ADMIN_TOKEN) ? next() : res.status(401).json({ error: 'Unauthorized' });
+};
+const FIELDS = ['name', 'price', 'color', 'image', 'category', 'description', 'sizes', 'stock'];
+const pick = (b) => Object.fromEntries(FIELDS.filter((k) => b[k] !== undefined).map((k) => [k, b[k]]));
+const bad = (e, res, next) => (e.name === 'ValidationError' || e.name === 'CastError'
+  ? res.status(400).json({ error: e.message }) : next(e));
+
+app.post('/api/admin/products', admin, async (req, res, next) => {
+  try { res.status(201).json(await Product.create(pick(req.body || {}))); } catch (e) { bad(e, res, next); }
+});
+app.put('/api/admin/products/:id', admin, async (req, res, next) => {
+  try {
+    const p = await Product.findByIdAndUpdate(req.params.id, { $set: pick(req.body || {}) }, { new: true, runValidators: true });
+    p ? res.json(p) : res.status(404).json({ error: 'Not found' });
+  } catch (e) { bad(e, res, next); }
+});
+app.delete('/api/admin/products/:id', admin, async (req, res, next) => {
+  try { (await Product.findByIdAndDelete(req.params.id)) ? res.json({ ok: true }) : res.status(404).json({ error: 'Not found' }); }
+  catch (e) { bad(e, res, next); }
+});
+app.get('/api/admin/orders', admin, async (_req, res, next) => {
+  try { res.json(await Order.find().sort({ createdAt: -1 }).limit(100).lean()); } catch (e) { next(e); }
+});
+
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, _req, res, _next) => {
   console.error(err);
@@ -132,4 +161,8 @@ app.use((err, _req, res, _next) => {
 });
 
 await mongoose.connect(MONGO_URI);
+if (AUTO_SEED !== 'false' && (await Product.countDocuments()) === 0) {
+  await Product.insertMany(seedData); // first boot: load the demo catalogue
+  console.log('Seeded demo products');
+}
 app.listen(PORT, () => console.log(`API listening on ${PORT}`));
